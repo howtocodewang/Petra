@@ -113,14 +113,115 @@ python zebrafish_xlx_train.py
 
 ### Predict and tracking
 
-1. Pose estimation using trained weights
+1. Modify visualization functions to draw keypoints and skeletons for animals, Navigate to the ```Petra/ultralytics/ultralytics/engine/results.py```
+``` shell
+def plot(
+        self,
+        conf=True,
+        line_width=None,
+        font_size=None,
+        font='Arial.ttf',
+        pil=False,
+        img=None,
+        im_gpu=None,
+        kpt_radius=5,
+        kpt_line=True,
+        labels=True,
+        boxes=True,
+        masks=True,
+        probs=True,
+        category='person' # add this line
+    ):
+```
+``` shell
+annotator = Annotator(
+            deepcopy(self.orig_img if img is None else img),
+            line_width,
+            font_size,
+            font,
+            pil or (pred_probs is not None and show_probs),  # Classify tasks default to pil=True
+            example=names,
+            category=category) # add this line
+```
+2. Navigate to the ```Petra/ultralytics/ultralytics/utils/plotting.py```
+``` shell
+def __init__(self, im, line_width=None, font_size=None, font='Arial.ttf', pil=False, example='abc', category='person' # add this):
+```
+``` shell
+# add this lines for visualization
+# Pose
+if category == 'person':
+    self.skeleton = [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13], [6, 7], [6, 8], [7, 9],
+                     [8, 10], [9, 11], [2, 3], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7]]
+
+    self.limb_color = colors.pose_palette[[9, 9, 9, 9, 7, 7, 7, 0, 0, 0, 0, 0, 16, 16, 16, 16, 16, 16, 16]]
+    self.kpt_color = colors.pose_palette[[16, 16, 16, 16, 16, 0, 0, 0, 0, 0, 0, 9, 9, 9, 9, 9, 9]]
+
+elif category == 'fish_tail':
+    self.skeleton = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8]]
+
+    self.limb_color = colors.pose_palette[[9, 9, 7, 7, 0, 0, 16, 16]]
+    self.kpt_color = colors.pose_palette[[16, 16, 16, 0, 0, 0, 9, 9, 9]]
+
+elif category == 'fish_full':
+    self.skeleton = [[1, 18], [1, 14], [18, 17], [18, 16], [17, 19], [16, 19], [14, 12], [14, 13],
+                     [12, 15], [13, 15], [19, 11], [15, 11], [11, 2], [2, 6], [6, 5], [5, 7], [7, 3],
+                     [3, 9], [9, 8], [8, 10], [10, 4]]
+
+    self.limb_color = colors.pose_palette[[9, 9, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 16, 16, 16, 16, 16, 16, 16, 16, 16]]
+    self.kpt_color = colors.pose_palette[[16, 0, 8, 8, 8, 8, 8, 8, 8, 8, 0, 9, 9, 9, 9, 9, 9, 9, 9]]
+
+elif category == 'fish_epilepsy_5':
+    # self.skeleton = [[1, 4], [4, 3], [3, 5], [5, 2], [1, 4], [1, 3], [1, 5], [1, 2]]
+    #
+    # self.limb_color = colors.pose_palette[[9, 7, 16, 8, 0, 0, 0, 0]]
+
+    self.skeleton = [[1, 4], [4, 3], [3, 5], [5, 2]]
+
+    self.limb_color = colors.pose_palette[[9, 7, 16, 8]]
+    self.kpt_color = colors.pose_palette[[16, 9, 8, 7, 6]]
+
+elif category == 'fish_xlx_10':
+    # self.skeleton = [[1, 4], [4, 3], [3, 5], [5, 2], [1, 4], [1, 3], [1, 5], [1, 2]]
+    #
+    # self.limb_color = colors.pose_palette[[9, 7, 16, 8, 0, 0, 0, 0]]
+
+    self.skeleton = [[0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9]]
+
+    self.limb_color = colors.pose_palette[[9, 9, 7, 16, 8, 12, 16, 7, 5, 3]]
+    self.kpt_color = colors.pose_palette[[16, 9, 9, 8, 7, 6, 5, 4, 3, 2]]
+```
+``` shell
+ def kpts(self, kpts, shape=(640, 640), radius=5, kpt_line=True):
+    """
+    Plot keypoints on the image.
+
+    Args:
+        kpts (tensor): Predicted keypoints with shape [17, 3]. Each keypoint has (x, y, confidence).
+        shape (tuple): Image shape as a tuple (h, w), where h is the height and w is the width.
+        radius (int, optional): Radius of the drawn keypoints. Default is 5.
+        kpt_line (bool, optional): If True, the function will draw lines connecting keypoints
+                                   for human pose. Default is True.
+
+    Note: `kpt_line=True` currently only supports human pose plotting.
+    """
+    if self.pil:
+        # Convert to numpy first
+        self.im = np.asarray(self.im).copy()
+    nkpt, ndim = kpts.shape
+    # modify as follow
+    # is_pose = nkpt == 17 and ndim == 3
+    is_pose = nkpt == self.kpt_color.shape[0] and ndim == 3
+    kpt_line &= is_pose  # `kpt_line=True` for now only supports human pose plotting
+```
+3. Pose estimation using trained weights
 ``` shell
 # Navigate to the predict folder
 
 cd Petra/experiments/src/zebrafish/predict/video
 python zebrafish_video_pose_pred.py
 ```
-2. Pose tracking using Bytetrack
+4. Pose tracking using Bytetrack
 ``` shell
 # Navigate to the predict folder
 
